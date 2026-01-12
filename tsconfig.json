@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": false, 
+    "types": [
+      "node"
+    ],
+    "moduleResolution": "node",  // Changed to "node" to match Vite's resolution strategy
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": false,  // Changed to false for troubleshooting purposes
+  },
+  "include": [
+    "src/**/*",   // Ensure the source code directory is included
+    "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",  // Make sure to exclude node_modules
+    "dist",          // Make sure to exclude build output
+    "build"
+  ]
+}
