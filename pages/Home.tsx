@@ -1,40 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-
-// Temporary types until we can import from actual files
-interface Draw {
-  id: string;
-  cycle: number;
-  startTime: number;
-  endTime: number;
-  isCompleted: boolean;
-  winningNumbers?: number[];
-  resultTime?: number;
-}
-
-interface Bet {
-  id: string;
-  userId: string;
-  drawId: string;
-  numbers: number[];
-  amount: number;
-  timestamp: number;
-  status?: string;
-  celebrated?: boolean;
-  potentialWin?: number;
-}
-
-const BetStatus = {
-  PENDING: 'pending',
-  WIN: 'win',
-  LOSE: 'lose'
-};
-
-const GameType = {
-  BALL_5_DRAW: '5-ball-draw'
-};
-
-const ENTRY_FEE = 10;
+import { Draw, GameType, Bet, BetStatus } from '../types';
+import { ENTRY_FEE } from '../constants';
 
 interface HomeProps {
   activeDraw?: Draw;
@@ -82,7 +50,7 @@ const Confetti: React.FC = () => {
   );
 };
 
-const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknowledgeWin }) => {
+const Home: React.FC<HomeProps> = ({ activeDraw, draws, bets, onAcknowledgeWin }) => {
   const [timeLeft, setTimeLeft] = useState('00:00:00');
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [winningBet, setWinningBet] = useState<Bet | null>(null);
@@ -90,55 +58,53 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
   
   const dismissedWinIds = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    const updateTimer = () => {
-      if (!activeDraw) {
-        setStatusText('AWAITING NEXT CYCLE');
-        setTimeLeft('--:--:--');
-        return;
-      }
+  const updateTimer = useCallback(() => {
+    if (!activeDraw) {
+      setStatusText('AWAITING NEXT CYCLE');
+      setTimeLeft('--:--:--');
+      return;
+    }
 
-      const now = Date.now();
-      const bettingClosed = now >= activeDraw.endTime;
-      const resultTime = activeDraw.resultTime || activeDraw.endTime + 3600000; // Default 1 hour after end
-      const resultTimeReached = now >= resultTime;
+    const now = Date.now();
+    const bettingClosed = now >= activeDraw.endTime;
+    const resultTimeReached = now >= activeDraw.resultTime;
 
-      if (resultTimeReached) {
-        setStatusText('PUBLISHING RESULTS');
-        setTimeLeft('PLEASE WAIT...');
-      } else if (bettingClosed) {
-        setStatusText('BETTING CLOSED');
-        setTimeLeft(`RESULT AT ${new Date(resultTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
-      } else {
-        setStatusText('BETTING CLOSES IN');
-        const diff = activeDraw.endTime - now;
-        if (diff <= 0) {
-          setTimeLeft('00:00:00');
-        } else {
-          const hours = Math.floor(diff / 3600000).toString().padStart(2, '0');
-          const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
-          const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-          setTimeLeft(`${hours}:${mins}:${secs}`);
-        }
-      }
-    };
-
-    updateTimer(); // Initial call
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
+    if (resultTimeReached) {
+      setStatusText('PUBLISHING RESULTS');
+      setTimeLeft('PLEASE WAIT...');
+    } else if (bettingClosed) {
+      setStatusText('BETTING CLOSED');
+      const diff = activeDraw.resultTime - now;
+      const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+      const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+      setTimeLeft(`RESULT AT ${new Date(activeDraw.resultTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`);
+    } else {
+      setStatusText('BETTING CLOSES IN');
+      const diff = activeDraw.endTime - now;
+      const hours = Math.floor(diff / 3600000).toString().padStart(2, '0');
+      const mins = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+      const secs = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+      setTimeLeft(`${hours}:${mins}:${secs}`);
+    }
   }, [activeDraw]);
 
   useEffect(() => {
-    if (!bets || bets.length === 0) return;
+    updateTimer(); // Initial call to prevent 1s delay
+    const timer = setInterval(updateTimer, 1000);
+    return () => clearInterval(timer);
+  }, [updateTimer]);
 
+  useEffect(() => {
     const uncelebratedWin = bets.find(b => 
       b.status === BetStatus.WIN && 
       !b.celebrated && 
       !dismissedWinIds.current.has(b.id)
     );
     
-    if (uncelebratedWin && !winningBet) {
+    if (uncelebratedWin) {
       setWinningBet(uncelebratedWin);
+    } else if (winningBet && !bets.find(b => b.id === winningBet.id && b.status === BetStatus.WIN)) {
+      setWinningBet(null);
     }
   }, [bets, winningBet]);
 
@@ -153,6 +119,7 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
   const isBettingClosed = activeDraw ? Date.now() >= activeDraw.endTime : true;
   const recentDraws = draws.filter(d => d.isCompleted).slice(0, 3);
 
+  // Helper to determine font size based on string length
   const getTimeFontSize = () => {
     if (timeLeft.length > 8) return 'text-2xl mt-4 px-4';
     return 'text-6xl';
@@ -189,7 +156,7 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
         
         <Link 
           to={(!isBettingClosed && activeDraw) ? `/betting/${encodeURIComponent(GameType.BALL_5_DRAW)}` : '#'}
-          className={`block group bg-white rounded-[3rem] p-8 border-2 border-transparent hover:border-red-500 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08)] hover:shadow-[0_30px_60px_-15px_rgba(239,68,68,0.2)] transition-all duration-500 relative overflow-hidden ${isBettingClosed ? 'opacity-70 grayscale-0 cursor-not-allowed' : ''}`}
+          className={`group bg-white rounded-[3rem] p-8 border-2 border-transparent hover:border-red-500 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.08)] hover:shadow-[0_30px_60px_-15px_rgba(239,68,68,0.2)] transition-all duration-500 flex flex-col items-center text-center relative overflow-hidden ${isBettingClosed ? 'opacity-70 grayscale-0 cursor-not-allowed' : ''}`}
           onClick={(e) => { if (isBettingClosed) e.preventDefault(); }}
         >
           <div className="absolute top-0 right-0 p-4">
@@ -197,19 +164,17 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
                 {isBettingClosed ? 'BETTING CLOSED' : `ENTRY: ₹${ENTRY_FEE}`}
              </span>
           </div>
-          <div className="flex flex-col items-center text-center">
-            <div className={`w-24 h-24 rounded-[2rem] bg-gradient-to-br flex items-center justify-center mb-6 shadow-2xl transition-transform ${isBettingClosed ? 'from-slate-400 to-slate-600' : 'from-red-500 to-red-800 group-hover:scale-110'}`}>
-               <div className="flex -space-x-2">
-                 {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-black text-xs border border-slate-100">?</div>)}
-               </div>
-            </div>
-            <h4 className="font-black text-slate-800 tracking-tight text-2xl group-hover:text-red-600 transition-colors">5-Ball Sequence</h4>
-            <p className="text-[11px] font-black text-slate-400 uppercase mt-2 tracking-[0.2em]">Match in order & Win up to</p>
-            <p className="text-4xl font-black text-emerald-600 tracking-tighter mt-1">₹5,00,000</p>
-            
-            <div className={`mt-8 w-full py-5 rounded-2xl text-white text-xs font-black uppercase tracking-[0.3em] transition-colors shadow-lg ${isBettingClosed ? 'bg-slate-300' : 'bg-slate-900 group-hover:bg-red-600'}`}>
-              {isBettingClosed ? 'Closed for Result' : 'Enter Draw Now'}
-            </div>
+          <div className={`w-24 h-24 rounded-[2rem] bg-gradient-to-br flex items-center justify-center mb-6 shadow-2xl transition-transform ${isBettingClosed ? 'from-slate-400 to-slate-600' : 'from-red-500 to-red-800 group-hover:scale-110'}`}>
+             <div className="flex -space-x-2">
+               {[1,2,3].map(i => <div key={i} className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-700 font-black text-xs border border-slate-100">?</div>)}
+             </div>
+          </div>
+          <h4 className="font-black text-slate-800 tracking-tight text-2xl group-hover:text-red-600 transition-colors">5-Ball Sequence</h4>
+          <p className="text-[11px] font-black text-slate-400 uppercase mt-2 tracking-[0.2em]">Match in order & Win up to</p>
+          <p className="text-4xl font-black text-emerald-600 tracking-tighter mt-1">₹5,00,000</p>
+          
+          <div className={`mt-8 w-full py-5 rounded-2xl text-white text-xs font-black uppercase tracking-[0.3em] transition-colors shadow-lg ${isBettingClosed ? 'bg-slate-300' : 'bg-slate-900 group-hover:bg-red-600'}`}>
+            {isBettingClosed ? 'Closed for Result' : 'Enter Draw Now'}
           </div>
         </Link>
       </section>
@@ -221,31 +186,22 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
             <h3 className="font-black text-slate-800 text-xl tracking-tight">Recent Results</h3>
           </div>
           <div className="space-y-5">
-            {recentDraws.map(draw => {
-              const resultTime = draw.resultTime || draw.endTime;
-              return (
-                <div key={draw.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                      {new Date(resultTime).toLocaleDateString(undefined, {month:'short', day:'numeric'})} Draw
-                    </span>
-                    <span className="text-[10px] font-black text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase">Verified</span>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    {draw.winningNumbers && draw.winningNumbers.length > 0 ? (
-                      draw.winningNumbers.map((n, i) => (
-                        <div key={i} className="w-10 h-10 rounded-full bg-white border-2 border-slate-100 flex items-center justify-center font-black text-slate-700 shadow-sm relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-transparent"></div>
-                          {n}
-                        </div>
-                      ))
-                    ) : (
-                      <span className="text-xs text-slate-400 italic">Results pending</span>
-                    )}
-                  </div>
+            {recentDraws.map(draw => (
+              <div key={draw.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{new Date(draw.resultTime).toLocaleDateString(undefined, {month:'short', day:'numeric'})} Draw</span>
+                  <span className="text-[10px] font-black text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase">Verified</span>
                 </div>
-              );
-            })}
+                <div className="flex gap-2 items-center">
+                  {draw.winningNumbers?.map((n, i) => (
+                    <div key={i} className="w-10 h-10 rounded-full bg-white border-2 border-slate-100 flex items-center justify-center font-black text-slate-700 shadow-sm relative overflow-hidden group">
+                      <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-transparent"></div>
+                      {n}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}
@@ -263,7 +219,7 @@ const Home: React.FC<HomeProps> = ({ activeDraw, draws = [], bets = [], onAcknow
                 <h2 className="text-white font-black text-4xl tracking-tighter uppercase leading-none drop-shadow-lg">JACKPOT WINNER!</h2>
                 <div className="bg-white/20 backdrop-blur-md py-4 rounded-3xl border border-white/20">
                    <p className="text-yellow-100 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Prize Credited</p>
-                   <p className="text-white text-5xl font-black tracking-tighter">₹{(winningBet.potentialWin || 0).toLocaleString()}</p>
+                   <p className="text-white text-5xl font-black tracking-tighter">₹{winningBet.potentialWin.toLocaleString()}</p>
                 </div>
                 <button onClick={handleCloseWinModal} className="w-full py-5 bg-white text-orange-600 rounded-2xl font-black shadow-xl active:scale-95 transition-all uppercase tracking-[0.2em] text-sm mt-4 border-2 border-orange-100">Collect Prize</button>
              </div>

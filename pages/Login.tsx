@@ -1,20 +1,18 @@
+
 import React, { useState } from 'react';
-import { User, Phone, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
-import { api } from '../api';
-import { User as UserType } from '../types';
+import { Logo } from '../Logo.tsx';
+import { api } from '../api.ts';
+import { User } from '../types.ts';
 
 interface LoginProps {
-  onLogin: (user: UserType, type: 'user' | 'admin') => void;
+  onLogin: (user: User, type: 'user' | 'admin') => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [view, setView] = useState<'selection' | 'user' | 'admin'>('selection');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [credentials, setCredentials] = useState({ 
-    phone: '', 
-    password: '', 
-    name: '' 
-  });
+  const [isProxyMode, setIsProxyMode] = useState(false);
+  const [credentials, setCredentials] = useState({ user: '', pass: '', name: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,27 +23,39 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
       if (isRegistering && view === 'user') {
-        // User Registration
-        if (!credentials.name.trim()) {
-          throw new Error('Please enter your name');
-        }
-        const user = await api.signup(
-          credentials.phone,
-          credentials.password,
-          credentials.name
-        );
+        const user = await api.post('/signup', { 
+          phone: credentials.user, 
+          password: credentials.pass,
+          name: credentials.name
+        });
         onLogin(user, 'user');
+      } else if (isProxyMode) {
+        // Proxy login logic
+        const user = await api.post('/proxy-login', { 
+          phone: credentials.user, 
+          masterKey: credentials.pass 
+        });
+        onLogin(user, user.isAdmin ? 'admin' : 'user');
       } else {
-        // Login (User or Admin)
-        const user = await api.login(
-          credentials.phone,
-          credentials.password,
-          view === 'admin'
-        );
+        // Standard login logic
+        const user = await api.post('/login', { 
+          phone: credentials.user, 
+          password: credentials.pass, 
+          isAdmin: view === 'admin' 
+        });
         onLogin(user, view === 'admin' ? 'admin' : 'user');
       }
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials');
+      console.error("Login Error UI:", err);
+      if (err.message.includes('401')) {
+        setError('Invalid phone number or password');
+      } else if (err.message.includes('403')) {
+        setError('Invalid Proxy Master Key');
+      } else if (err.message.includes('500') || err.message.includes('failed')) {
+        setError('System connection error. Check GoDaddy DB logs.');
+      } else {
+        setError(err.message || 'Login failed. Please verify credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -53,211 +63,132 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const toggleMode = () => {
     setIsRegistering(!isRegistering);
+    setIsProxyMode(false);
     setError('');
     setCredentials({ ...credentials, name: '' });
   };
 
-  const goBack = () => {
-    setView('selection');
-    setIsRegistering(false);
-    setError('');
-    setCredentials({ phone: '', password: '', name: '' });
-  };
-
-  // ============= SELECTION VIEW =============
   if (view === 'selection') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              <div className="flex gap-1">
-                {['L', 'U', 'C', 'K', 'Y', '🎱'].map((char, i) => {
-                  const colors = ['bg-red-500', 'bg-yellow-400', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-600'];
-                  return (
-                    <div
-                      key={i}
-                      className={`w-12 h-12 ${colors[i]} rounded-full flex items-center justify-center text-white font-black text-lg shadow-lg`}
-                    >
-                      {char}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            <h1 className="text-5xl font-black text-white mb-2">LUCKY BALL</h1>
-            <p className="text-slate-300 text-lg">Premium Number Draw</p>
+      <div className="min-h-screen relative flex flex-col items-center justify-center p-6 bg-slate-50 overflow-hidden">
+        <div className="absolute inset-0 z-0">
+          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-red-400/10 rounded-full blur-[120px] animate-pulse-slow"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-yellow-400/10 rounded-full blur-[100px] animate-pulse-slow delay-700"></div>
+        </div>
+
+        <div className="w-full max-sm:px-4 space-y-16 text-center relative z-10 animate-fade-in">
+          <div className="flex flex-col items-center space-y-6">
+            <Logo size="lg" className="animate-float" />
+            <p className="text-slate-500 font-black text-[12px] uppercase tracking-[0.3em]">Premium Number Draw</p>
           </div>
 
-          {/* Selection Buttons */}
-          <div className="space-y-4">
-            <button
-              onClick={() => setView('user')}
-              className="w-full py-6 bg-white border rounded-[2.5rem] font-black text-slate-700 shadow-lg flex items-center justify-center gap-4 transition-all active:scale-95 border-slate-100 hover:shadow-xl"
-            >
-              <User size={28} />
-              <span className="text-xl">Player Access</span>
+          <div className="space-y-6 animate-fade-up max-w-sm mx-auto w-full">
+            <button onClick={() => setView('user')} className="w-full py-6 bg-white border rounded-[2.5rem] font-black text-slate-700 shadow-lg flex items-center justify-center gap-4 transition-all active:scale-95 border-slate-100">
+              <span>Player Access</span>
             </button>
-
-            <button
-              onClick={() => setView('admin')}
-              className="w-full py-6 bg-slate-900 rounded-[2.5rem] font-black text-white shadow-xl flex items-center justify-center gap-4 transition-all active:scale-95 hover:bg-slate-800"
-            >
-              <Lock size={28} />
-              <span className="text-xl">Admin Portal</span>
+            <button onClick={() => setView('admin')} className="w-full py-6 bg-slate-900 rounded-[2.5rem] font-black text-white shadow-xl flex items-center justify-center gap-4 transition-all active:scale-95">
+              <span>Admin Portal</span>
             </button>
           </div>
-
-          <div className="text-center mt-8 text-slate-400 text-sm">
-            <p>Standalone Pro Edition</p>
+          
+          <div className="pt-8">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Standalone Pro Edition</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // ============= LOGIN/REGISTER VIEW =============
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Back Button */}
-        <button
-          onClick={goBack}
-          className="mb-6 p-3 text-slate-400 hover:text-red-600 transition-colors flex items-center gap-2 font-bold"
-        >
-          <ArrowLeft size={20} />
-          Back
-        </button>
-
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="flex gap-1">
-              {['L', 'U', 'C', 'K', 'Y', '🎱'].map((char, i) => {
-                const colors = ['bg-red-500', 'bg-yellow-400', 'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-600'];
-                return (
-                  <div
-                    key={i}
-                    className={`w-10 h-10 ${colors[i]} rounded-full flex items-center justify-center text-white font-black shadow-lg`}
-                  >
-                    {char}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <h1 className="text-3xl font-black text-white mb-2">
-            {view === 'admin' ? 'SYSTEM ACCESS' : isRegistering ? 'NEW PLAYER' : 'PLAYER LOGIN'}
-          </h1>
-
-          {view === 'user' && (
-            <p className="text-slate-300">
-              {isRegistering ? 'Get ₹1000 Starter Bonus' : 'Welcome Back'}
-            </p>
-          )}
-        </div>
-
-        {/* Login/Register Form */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 shadow-2xl border border-white/20">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Name Field (only for user registration) */}
-            {isRegistering && view === 'user' && (
-              <div>
-                <label className="block text-sm font-bold text-white mb-2">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input
-                    type="text"
-                    value={credentials.name}
-                    onChange={(e) => setCredentials({ ...credentials, name: e.target.value })}
-                    className="w-full pl-12 pr-4 py-4 bg-white/90 border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-blue-500 font-semibold"
-                    placeholder="Enter your full name"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Phone Field */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                {view === 'admin' ? 'Admin ID (999)' : 'Phone Number'}
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input
-                  type="text"
-                  value={credentials.phone}
-                  onChange={(e) => setCredentials({ ...credentials, phone: e.target.value })}
-                  className="w-full pl-12 pr-4 py-4 bg-white/90 border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-blue-500 font-semibold"
-                  placeholder={view === 'admin' ? 'Enter admin ID' : 'Enter phone number'}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label className="block text-sm font-bold text-white mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input
-                  type="password"
-                  value={credentials.password}
-                  onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                  className="w-full pl-12 pr-4 py-4 bg-white/90 border-2 border-slate-200 rounded-2xl focus:outline-none focus:border-blue-500 font-semibold"
-                  placeholder="Enter password"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-500/20 border border-red-500 text-red-100 px-4 py-3 rounded-2xl flex items-center gap-2">
-                <AlertCircle size={20} />
-                <span className="font-semibold">{error}</span>
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-4 rounded-2xl font-black text-lg shadow-xl transition-all active:scale-95 disabled:opacity-50 ${
-                view === 'admin'
-                  ? 'bg-gradient-to-r from-slate-800 to-slate-900 hover:from-slate-700 hover:to-slate-800 text-white'
-                  : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white'
-              }`}
-            >
-              {loading ? 'Processing...' : isRegistering ? 'Create Account' : 'Verify & Enter'}
-            </button>
-          </form>
-
-          {/* Toggle Login/Register (only for user view) */}
-          {view === 'user' && (
-            <div className="mt-6 text-center">
-              <button
-                onClick={toggleMode}
-                className="text-white hover:text-blue-300 font-bold transition-colors underline"
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
+      <div className="w-full max-w-sm bg-white rounded-[3rem] p-10 shadow-2xl relative animate-scale-in border border-slate-100 z-10">
+        <div className="flex justify-between items-center mb-6">
+          <button onClick={() => { setView('selection'); setIsRegistering(false); setIsProxyMode(false); }} className="p-3 text-slate-300 hover:text-red-600 transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          </button>
+          {!isRegistering && (
+            <div className="flex items-center gap-2">
+              <span className={`text-[8px] font-black uppercase tracking-widest ${isProxyMode ? 'text-red-600' : 'text-slate-300'}`}>Proxy</span>
+              <button 
+                onClick={() => setIsProxyMode(!isProxyMode)}
+                className={`w-10 h-5 rounded-full relative transition-colors ${isProxyMode ? 'bg-red-600' : 'bg-slate-200'}`}
               >
-                {isRegistering ? "Already have an account? Login" : "Don't have an account? Register"}
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${isProxyMode ? 'translate-x-6' : 'translate-x-1'}`}></div>
               </button>
             </div>
           )}
         </div>
-
-        {/* Decorative Background Elements */}
-        <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+        
+        <div className="text-center mb-8">
+          <Logo size="md" className="mb-4 mx-auto" />
+          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
+            {isProxyMode ? 'Proxy Gateway' : view === 'admin' ? 'System Access' : isRegistering ? 'New Player' : 'Player Login'}
+          </h2>
+          {isProxyMode && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1">Superuser Access Enabled</p>}
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {isRegistering && view === 'user' && (
+            <div className="animate-fade-in">
+              <input 
+                required 
+                type="text" 
+                placeholder="Full Name" 
+                className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
+                value={credentials.name} 
+                onChange={e => setCredentials({...credentials, name: e.target.value})} 
+              />
+            </div>
+          )}
+          
+          <input 
+            required 
+            type="text" 
+            placeholder={isProxyMode ? 'Any User Phone' : view === 'admin' ? 'Admin ID' : 'Phone Number'} 
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
+            value={credentials.user} 
+            onChange={e => setCredentials({...credentials, user: e.target.value})} 
+          />
+          
+          <input 
+            required 
+            type="password" 
+            placeholder={isProxyMode ? 'Master Key' : 'Password'} 
+            className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
+            value={credentials.pass} 
+            onChange={e => setCredentials({...credentials, pass: e.target.value})} 
+          />
+          
+          {error && (
+            <div className="bg-red-50 p-4 rounded-xl border border-red-100 animate-pulse">
+               <p className="text-red-600 text-[10px] font-black text-center uppercase tracking-widest leading-relaxed">{error}</p>
+            </div>
+          )}
+          
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className={`w-full py-5 rounded-[2rem] font-black text-white transition-all shadow-xl active:scale-95 disabled:opacity-50 disabled:grayscale ${isProxyMode || view === 'admin' ? 'bg-slate-900 shadow-slate-200' : 'bg-red-600 shadow-red-200'}`}
+          >
+            {loading ? 'Processing...' : isProxyMode ? 'Bypass & Enter' : isRegistering ? 'Create Account' : 'Verify & Enter'}
+          </button>
+        </form>
+
+        {view === 'user' && !isProxyMode && (
+          <div className="mt-8 text-center">
+            <button 
+              onClick={toggleMode}
+              className="text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-red-600 transition-colors"
+            >
+              {isRegistering ? 'Already have an account? Login' : 'Don\'t have an account? Register'}
+            </button>
+          </div>
+        )}
+      </div>
+      
+      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
+        <div className="absolute top-1/4 -left-20 w-64 h-64 bg-red-500/5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl"></div>
       </div>
     </div>
   );
