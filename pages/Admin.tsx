@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { adminApi } from '../adminApi';
 
 interface Draw {
   id: string;
@@ -35,12 +34,6 @@ interface Bet {
   numbers: number[];
   amount: number;
   timestamp: number;
-}
-
-enum TransactionStatus {
-  PENDING = 'pending',
-  APPROVED = 'approved',
-  REJECTED = 'rejected',
 }
 
 interface AdminProps {
@@ -89,9 +82,7 @@ const Admin: React.FC<AdminProps> = ({
     setCreatingDraw(true);
 
     try {
-      // Call the parent's onCreateDraw which uses adminApi
       await onCreateDraw(cycle);
-
       alert('✅ Draw created successfully!');
     } catch (error: any) {
       console.error('Error creating draw:', error);
@@ -101,34 +92,21 @@ const Admin: React.FC<AdminProps> = ({
     }
   };
 
-  const handleFinalize = (drawId: string) => {
+  const handleFinalize = async (drawId: string) => {
     const winningNumbers = winningInput.split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n));
     if (winningNumbers.length !== 5) {
       alert("Please enter exactly 5 winning numbers in sequence.");
       return;
     }
-    onFinalizeDraw(drawId, winningNumbers)
-      .then(() => {
-        // Optionally, refresh the list of draws after finalizing
-        fetchDraws(); // Make sure to update the draw list after finalization
-        alert('Draw finalized successfully!');
-      })
-      .catch((error) => {
-        console.error('Error finalizing draw:', error);
-        alert(`❌ Failed to finalize draw: ${error.message || 'Please try again.'}`);
-      });
 
-    setEditingDraw(null);
-    setWinningInput('');
-  };
-
-  const fetchDraws = async () => {
     try {
-      const response = await fetch('https://xiadot.com/luckyball.in/api/admin/admin_get_draws.php'); // Adjust the API endpoint as necessary
-      const data = await response.json();
-      setDraws(data); // Assuming setDraws is a state setter for the draws array
-    } catch (error) {
-      console.error('Failed to fetch draws:', error);
+      await onFinalizeDraw(drawId, winningNumbers);
+      alert('✅ Draw finalized successfully!');
+      setEditingDraw(null);
+      setWinningInput('');
+    } catch (error: any) {
+      console.error('Error finalizing draw:', error);
+      alert(`❌ Failed to finalize draw: ${error.message || 'Please try again.'}`);
     }
   };
 
@@ -140,7 +118,13 @@ const Admin: React.FC<AdminProps> = ({
     <div className="flex flex-col h-full bg-slate-50">
       <div className="bg-white border-b border-slate-200 p-2 sticky top-0 z-30 shadow-sm">
         <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-2">
-          {[{ id: 'draws', label: 'Draws' }, { id: 'requests', label: `Pending (${depositRequests.length + withdrawalRequests.length})` }, { id: 'users', label: 'Users' }, { id: 'history', label: 'Global Tx' }, { id: 'settings', label: 'Settings' }].map(tab => (
+          {[
+            { id: 'draws', label: 'Draws' }, 
+            { id: 'requests', label: `Pending (${depositRequests.length + withdrawalRequests.length})` }, 
+            { id: 'users', label: 'Users' }, 
+            { id: 'history', label: 'Global Tx' }, 
+            { id: 'settings', label: 'Settings' }
+          ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
@@ -180,7 +164,7 @@ const Admin: React.FC<AdminProps> = ({
             <section>
               <h3 className="font-black text-slate-800 mb-6 flex items-center gap-3">
                 <span className="w-1.5 h-6 bg-red-600 rounded-full"></span>
-                ACTIVE MONITORING
+                ACTIVE MONITORING ({activeDraws.length})
               </h3>
               <div className="space-y-6">
                 {activeDraws.length === 0 && (
