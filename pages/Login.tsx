@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Logo } from '../Logo.tsx';
 import { api } from '../api.ts';
 import { User } from '../types.ts';
@@ -11,61 +11,60 @@ interface LoginProps {
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [view, setView] = useState<'selection' | 'user' | 'admin'>('selection');
   const [isRegistering, setIsRegistering] = useState(false);
-  const [isProxyMode, setIsProxyMode] = useState(false);
   const [credentials, setCredentials] = useState({ user: '', pass: '', name: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForceReset, setShowForceReset] = useState(false);
+
+  useEffect(() => {
+    let timer: any;
+    if (loading) {
+      // If loading takes more than 8 seconds, show a reset button
+      timer = setTimeout(() => setShowForceReset(true), 8000);
+    } else {
+      setShowForceReset(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setShowForceReset(false);
 
     try {
+      console.log(`[Login] Attempting ${view} login for:`, credentials.user);
+      
+      let user: User;
       if (isRegistering && view === 'user') {
-        const user = await api.post('/signup', { 
+        user = await api.post('/signup', { 
           phone: credentials.user, 
           password: credentials.pass,
           name: credentials.name
         });
-        onLogin(user, 'user');
-      } else if (isProxyMode) {
-        // Proxy login logic
-        const user = await api.post('/proxy-login', { 
-          phone: credentials.user, 
-          masterKey: credentials.pass 
-        });
-        onLogin(user, user.isAdmin ? 'admin' : 'user');
       } else {
-        // Standard login logic
-        const user = await api.post('/login', { 
+        user = await api.post('/login', { 
           phone: credentials.user, 
           password: credentials.pass, 
           isAdmin: view === 'admin' 
         });
-        onLogin(user, view === 'admin' ? 'admin' : 'user');
       }
+
+      console.log("[Login] Success! User Name:", user.name);
+      onLogin(user, view === 'admin' ? 'admin' : 'user');
     } catch (err: any) {
-      console.error("Login Error UI:", err);
-      if (err.message.includes('401')) {
-        setError('Invalid phone number or password');
-      } else if (err.message.includes('403')) {
-        setError('Invalid Proxy Master Key');
-      } else if (err.message.includes('500') || err.message.includes('failed')) {
-        setError('System connection error. Check GoDaddy DB logs.');
-      } else {
-        setError(err.message || 'Login failed. Please verify credentials.');
-      }
+      console.error("[Login] Caught Error:", err.message);
+      setError(err.message || 'Login failed. Check server status.');
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsRegistering(!isRegistering);
-    setIsProxyMode(false);
-    setError('');
-    setCredentials({ ...credentials, name: '' });
+  const resetForm = () => {
+    setLoading(false);
+    setError('Request was reset manually.');
+    setShowForceReset(false);
   };
 
   if (view === 'selection') {
@@ -90,10 +89,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <span>Admin Portal</span>
             </button>
           </div>
-          
-          <div className="pt-8">
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Standalone Pro Edition</p>
-          </div>
         </div>
       </div>
     );
@@ -103,48 +98,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50 relative overflow-hidden">
       <div className="w-full max-w-sm bg-white rounded-[3rem] p-10 shadow-2xl relative animate-scale-in border border-slate-100 z-10">
         <div className="flex justify-between items-center mb-6">
-          <button onClick={() => { setView('selection'); setIsRegistering(false); setIsProxyMode(false); }} className="p-3 text-slate-300 hover:text-red-600 transition-colors">
+          <button onClick={() => { setView('selection'); setIsRegistering(false); setError(''); }} className="p-3 text-slate-300 hover:text-red-600 transition-colors" disabled={loading}>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
           </button>
-          {!isRegistering && (
-            <div className="flex items-center gap-2">
-              <span className={`text-[8px] font-black uppercase tracking-widest ${isProxyMode ? 'text-red-600' : 'text-slate-300'}`}>Proxy</span>
-              <button 
-                onClick={() => setIsProxyMode(!isProxyMode)}
-                className={`w-10 h-5 rounded-full relative transition-colors ${isProxyMode ? 'bg-red-600' : 'bg-slate-200'}`}
-              >
-                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${isProxyMode ? 'translate-x-6' : 'translate-x-1'}`}></div>
-              </button>
-            </div>
-          )}
         </div>
         
         <div className="text-center mb-8">
           <Logo size="md" className="mb-4 mx-auto" />
           <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">
-            {isProxyMode ? 'Proxy Gateway' : view === 'admin' ? 'System Access' : isRegistering ? 'New Player' : 'Player Login'}
+            {view === 'admin' ? 'System Access' : isRegistering ? 'New Player' : 'Player Login'}
           </h2>
-          {isProxyMode && <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1">Superuser Access Enabled</p>}
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {isRegistering && view === 'user' && (
-            <div className="animate-fade-in">
-              <input 
-                required 
-                type="text" 
-                placeholder="Full Name" 
-                className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
-                value={credentials.name} 
-                onChange={e => setCredentials({...credentials, name: e.target.value})} 
-              />
-            </div>
+          {isRegistering && (
+            <input 
+              required 
+              disabled={loading}
+              type="text" 
+              placeholder="Full Name" 
+              className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
+              value={credentials.name} 
+              onChange={e => setCredentials({...credentials, name: e.target.value})} 
+            />
           )}
           
           <input 
             required 
+            disabled={loading}
             type="text" 
-            placeholder={isProxyMode ? 'Any User Phone' : view === 'admin' ? 'Admin ID' : 'Phone Number'} 
+            placeholder="Username" 
             className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
             value={credentials.user} 
             onChange={e => setCredentials({...credentials, user: e.target.value})} 
@@ -152,43 +135,54 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           
           <input 
             required 
+            disabled={loading}
             type="password" 
-            placeholder={isProxyMode ? 'Master Key' : 'Password'} 
+            placeholder="Password" 
             className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl font-black outline-none focus:ring-4 focus:ring-red-500/10 transition-all" 
             value={credentials.pass} 
             onChange={e => setCredentials({...credentials, pass: e.target.value})} 
           />
           
           {error && (
-            <div className="bg-red-50 p-4 rounded-xl border border-red-100 animate-pulse">
-               <p className="text-red-600 text-[10px] font-black text-center uppercase tracking-widest leading-relaxed">{error}</p>
+            <div className="bg-red-50 p-4 rounded-xl border border-red-100 animate-pulse text-red-600 text-[10px] font-black text-center uppercase tracking-widest leading-relaxed">
+               {error}
             </div>
           )}
           
           <button 
             type="submit" 
             disabled={loading} 
-            className={`w-full py-5 rounded-[2rem] font-black text-white transition-all shadow-xl active:scale-95 disabled:opacity-50 disabled:grayscale ${isProxyMode || view === 'admin' ? 'bg-slate-900 shadow-slate-200' : 'bg-red-600 shadow-red-200'}`}
+            className={`w-full py-5 rounded-[2rem] font-black text-white transition-all shadow-xl active:scale-95 disabled:bg-slate-300 ${view === 'admin' ? 'bg-slate-900' : 'bg-red-600'}`}
           >
-            {loading ? 'Processing...' : isProxyMode ? 'Bypass & Enter' : isRegistering ? 'Create Account' : 'Verify & Enter'}
+            {loading ? (
+              <div className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Processing...
+              </div>
+            ) : 'Verify & Enter'}
           </button>
         </form>
 
-        {view === 'user' && !isProxyMode && (
+        {showForceReset && (
+          <button 
+            onClick={resetForm}
+            className="mt-4 w-full text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline"
+          >
+            Taking too long? Click to reset
+          </button>
+        )}
+
+        {view === 'user' && (
           <div className="mt-8 text-center">
             <button 
-              onClick={toggleMode}
+              disabled={loading}
+              onClick={() => { setIsRegistering(!isRegistering); setError(''); }}
               className="text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-red-600 transition-colors"
             >
-              {isRegistering ? 'Already have an account? Login' : 'Don\'t have an account? Register'}
+              {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}
             </button>
           </div>
         )}
-      </div>
-      
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-        <div className="absolute top-1/4 -left-20 w-64 h-64 bg-red-500/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/4 -right-20 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl"></div>
       </div>
     </div>
   );

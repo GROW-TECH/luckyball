@@ -45,19 +45,6 @@ const Admin: React.FC<AdminProps> = ({
     setWinningInput('');
   };
 
-  const handleProxyUserLogin = async (phone: string) => {
-    if (!confirm(`Switch view to User: ${phone}?`)) return;
-    try {
-      const user = await api.post('/proxy-login', { phone, masterKey: 'proxy777' });
-      // We manually update local storage and reload to switch to user view
-      localStorage.setItem('lb_auth_type', 'user');
-      localStorage.setItem('lb_user', JSON.stringify(user));
-      window.location.reload();
-    } catch (e) {
-      alert("Proxy login failed");
-    }
-  };
-
   const activeDraws = draws.filter(d => !d.isCompleted);
   const getBetsForDraw = (drawId: string) => bets.filter(b => b.drawId === drawId);
 
@@ -296,16 +283,7 @@ const Admin: React.FC<AdminProps> = ({
                         <button onClick={() => setAdjustingUser(null)} className="bg-slate-200 text-slate-600 px-5 rounded-xl text-[10px] font-black uppercase tracking-widest">X</button>
                       </div>
                     ) : (
-                      <>
-                        <button onClick={() => setAdjustingUser(user.id)} className="flex-[2] bg-slate-900 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all">Adjust Balance</button>
-                        <button 
-                          onClick={() => handleProxyUserLogin(user.phone)}
-                          title="Login as this user"
-                          className="flex-1 bg-red-50 text-red-600 border border-red-100 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-red-600 hover:text-white transition-all"
-                        >
-                          Proxy View
-                        </button>
-                      </>
+                      <button onClick={() => setAdjustingUser(user.id)} className="w-full bg-slate-900 text-white py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all">Adjust Balance</button>
                     )}
                   </div>
                 </div>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
 
@@ -23,16 +24,12 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdateUser, onLogout }) => {
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordForm.old !== user.password) {
-      showMsg('error', 'Old password does not match.');
-      return;
-    }
     if (passwordForm.new !== passwordForm.confirm) {
       showMsg('error', 'New passwords do not match.');
       return;
     }
-    if (passwordForm.new.length < 6) {
-      showMsg('error', 'Password must be at least 6 characters.');
+    if (passwordForm.new.length < 4) {
+      showMsg('error', 'Password must be at least 4 characters.');
       return;
     }
     onUpdateUser({ password: passwordForm.new });
@@ -103,15 +100,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdateUser, onLogout }) => {
         </div>
         <form onSubmit={handleChangePassword} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Current Password</label>
-            <input 
-              type="password" 
-              className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-red-500 font-bold text-slate-700"
-              value={passwordForm.old}
-              onChange={e => setPasswordForm({ ...passwordForm, old: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">New Password</label>
             <input 
               type="password" 
@@ -138,14 +126,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onUpdateUser, onLogout }) => {
       <div className="pt-4 space-y-4">
         <button 
           onClick={onLogout}
-          className="w-full py-5 bg-white text-red-600 border-2 border-red-600 rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+          className="w-full py-5 bg-slate-900 text-white rounded-[2rem] font-black text-sm uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
           Logout Account
         </button>
-        <p className="text-[10px] text-slate-300 text-center font-bold uppercase tracking-tighter">Your data is encrypted and secure.</p>
       </div>
     </div>
   );

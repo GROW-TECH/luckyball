@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bet, Draw, BetStatus } from '../types';
 
@@ -26,8 +25,8 @@ const History: React.FC<HistoryProps> = ({ bets, draws }) => {
             onClick={() => setFilter(f as any)}
             className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap border transition-all ${
               filter === f 
-              ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-              : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'
+              ? 'bg-red-600 border-red-600 text-white shadow-md' 
+              : 'bg-white border-slate-200 text-slate-500 hover:border-red-300'
             }`}
           >
             {f}
@@ -57,7 +56,7 @@ const History: React.FC<HistoryProps> = ({ bets, draws }) => {
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="font-bold text-slate-800">{bet.gameType}</h4>
-                    <p className="text-[10px] text-slate-400">{new Date(bet.timestamp).toLocaleString()}</p>
+                    <p className="text-[10px] text-slate-400">{bet.timestamp ? new Date(bet.timestamp).toLocaleString() : 'N/A'}</p>
                   </div>
                   <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                     bet.status === BetStatus.WIN ? 'bg-green-100 text-green-700' :
@@ -70,21 +69,21 @@ const History: React.FC<HistoryProps> = ({ bets, draws }) => {
                 <div className="flex items-center gap-2 mb-4">
                   <span className="text-xs text-slate-400 font-medium">Numbers:</span>
                   <div className="flex gap-1.5">
-                    {bet.numbers.map((n, i) => (
+                    {Array.isArray(bet.numbers) ? bet.numbers.map((n, i) => (
                       <span key={i} className="w-6 h-6 bg-slate-100 rounded flex items-center justify-center text-xs font-bold text-slate-700">{n}</span>
-                    ))}
+                    )) : null}
                   </div>
                 </div>
 
                 <div className="flex justify-between items-end border-t border-slate-50 pt-3">
                   <div>
                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Bet Amount</p>
-                    <p className="font-bold text-slate-800">₹{bet.amount}</p>
+                    <p className="font-bold text-slate-800">₹{(bet.amount || 0).toLocaleString()}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">Potential Win</p>
-                    <p className={`font-black text-lg ${bet.status === BetStatus.WIN ? 'text-green-600' : 'text-indigo-600'}`}>
-                      ₹{bet.potentialWin.toLocaleString()}
+                    <p className={`font-black text-lg ${bet.status === BetStatus.WIN ? 'text-green-600' : 'text-red-600'}`}>
+                      ₹{(bet.potentialWin || 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
