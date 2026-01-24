@@ -1,0 +1,11 @@
+
+{
+  "name": "Lucky Ball – Pro Number Draw Betting",
+  "description": "A high-end number draw betting platform with real-time countdowns, multiple game formats, integrated wallet, and comprehensive admin controls.",
+  "requestFramePermissions": [],
+  "short_name": "LuckyBall",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ef4444",
+  "theme_color": "#ef4444"
+}
